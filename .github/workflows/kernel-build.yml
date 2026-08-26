@@ -9,11 +9,8 @@ on:
       - "android@13"
   workflow_dispatch:
 
-# Temporarily writable so the first integration run can persist the manual-hook
-# source changes and the pinned KernelSU Next submodule. This is reverted to
-# read-only after the integration commit lands.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: kernel-build-${{ github.ref }}
@@ -29,7 +26,6 @@ jobs:
       - name: Checkout kernel source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           submodules: recursive
 
       - name: Install build dependencies
@@ -47,37 +43,18 @@ jobs:
             perl \
             python3
 
-      - name: Integrate KernelSU Next
-        run: bash scripts/integrate-kernelsu-next.sh
-
-      - name: Persist KernelSU Next source integration
-        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+      - name: Verify KernelSU Next source integration
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # This kernel tree ignores .gitmodules, so explicitly stage it.
-          git add -f .gitmodules
-          git add \
-            KernelSU-Next \
-            drivers/kernelsu \
-            drivers/Makefile \
-            drivers/Kconfig \
-            include/linux/kernelsu.h \
-            fs/exec.c \
-            fs/open.c \
-            fs/read_write.c \
-            fs/stat.c \
-            kernel/reboot.c \
-            kernel/sys.c \
-            drivers/input/input.c \
-            security/selinux/hooks.c \
-            arch/arm64/configs/hi3650_defconfig
-
-          if ! git diff --cached --quiet; then
-            git commit -m "kernel: integrate KernelSU Next legacy"
-            git push origin HEAD:"${GITHUB_REF_NAME}"
-          fi
+          test "$(git -C KernelSU-Next rev-parse HEAD)" = "a54e4fa46c6cc25bcaa055cf14d790194beffed8"
+          test -L drivers/kernelsu
+          grep -Fq 'obj-$(CONFIG_KSU) += kernelsu/' drivers/Makefile
+          grep -Fq 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -q '^CONFIG_KSU=y$' arch/arm64/configs/hi3650_defconfig
+          grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' arch/arm64/configs/hi3650_defconfig
+          grep -Fq 'ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);' fs/exec.c
+          grep -Fq 'ksu_handle_vfs_read(&file, &buf, &count, &pos);' fs/read_write.c
+          grep -Fq 'ksu_handle_setresuid(ruid, euid, suid);' kernel/sys.c
+          grep -Fq 'ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);' kernel/reboot.c
 
       - name: Fetch GCC 4.9 toolchains
         run: |
