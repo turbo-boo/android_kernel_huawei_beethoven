@@ -56,8 +56,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # This kernel tree ignores .gitmodules, so explicitly stage it.
+          git add -f .gitmodules
           git add \
-            .gitmodules \
             KernelSU-Next \
             drivers/kernelsu \
             drivers/Makefile \
