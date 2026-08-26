@@ -9,8 +9,11 @@ on:
       - "android@13"
   workflow_dispatch:
 
+# Temporarily writable so the first integration run can persist the manual-hook
+# source changes and the pinned KernelSU Next submodule. This is reverted to
+# read-only after the integration commit lands.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: kernel-build-${{ github.ref }}
@@ -25,6 +28,9 @@ jobs:
     steps:
       - name: Checkout kernel source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
 
       - name: Install build dependencies
         run: |
@@ -33,12 +39,44 @@ jobs:
             bc \
             bison \
             build-essential \
+            curl \
             flex \
             git \
             libelf-dev \
             libssl-dev \
             perl \
             python3
+
+      - name: Integrate KernelSU Next
+        run: bash scripts/integrate-kernelsu-next.sh
+
+      - name: Persist KernelSU Next source integration
+        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            .gitmodules \
+            KernelSU-Next \
+            drivers/kernelsu \
+            drivers/Makefile \
+            drivers/Kconfig \
+            include/linux/kernelsu.h \
+            fs/exec.c \
+            fs/open.c \
+            fs/read_write.c \
+            fs/stat.c \
+            kernel/reboot.c \
+            kernel/sys.c \
+            drivers/input/input.c \
+            security/selinux/hooks.c \
+            arch/arm64/configs/hi3650_defconfig
+
+          if ! git diff --cached --quiet; then
+            git commit -m "kernel: integrate KernelSU Next legacy"
+            git push origin HEAD:"${GITHUB_REF_NAME}"
+          fi
 
       - name: Fetch GCC 4.9 toolchains
         run: |
@@ -58,6 +96,12 @@ jobs:
           export CROSS_COMPILE_ARM32="$RUNNER_TEMP/gcc-arm/bin/arm-linux-androideabi-"
           make O=out hi3650_defconfig
 
+      - name: Verify KernelSU configuration
+        run: |
+          grep -q '^CONFIG_KSU=y$' out/.config
+          grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' out/.config
+          grep -q '^# CONFIG_KSU_KPROBES_HOOK is not set$' out/.config
+
       - name: Build kernel
         env:
           ARCH: arm64
@@ -75,7 +119,7 @@ jobs:
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: hi3650-kernel-${{ github.sha }}
+          name: hi3650-kernelsu-next-${{ github.sha }}
           if-no-files-found: error
           retention-days: 14
           path: |
