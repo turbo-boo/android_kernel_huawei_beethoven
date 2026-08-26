@@ -13,6 +13,7 @@
 #include <linux/security.h>
 #include <linux/export.h>
 #include <linux/syscalls.h>
+#include <linux/kernelsu.h>
 #include <linux/pagemap.h>
 #include <linux/splice.h>
 #include <linux/compat.h>
@@ -439,6 +440,8 @@ EXPORT_SYMBOL(__vfs_read);
 ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
+
+	ksu_handle_vfs_read(&file, &buf, &count, &pos);
 
 	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;

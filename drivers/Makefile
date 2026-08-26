@@ -184,3 +184,5 @@ obj-$(CONFIG_HUAWEI_DSM)	+= dsm/
 obj-$(CONFIG_CONNECTIVITY_HI110X)     += connectivity/
 obj-$(CONFIG_HW_GADGET) += hwusb/
 obj-$(CONFIG_HW_CPULOAD_NOTI) += cpuload/
+
+obj-$(CONFIG_KSU) += kernelsu/

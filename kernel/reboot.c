@@ -14,6 +14,7 @@
 #include <linux/reboot.h>
 #include <linux/suspend.h>
 #include <linux/syscalls.h>
+#include <linux/kernelsu.h>
 #include <linux/syscore_ops.h>
 #include <linux/uaccess.h>
 
@@ -283,6 +284,10 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 	struct pid_namespace *pid_ns = task_active_pid_ns(current);
 	char buffer[256];
 	int ret = 0;
+
+	ret = ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);
+	if (ret)
+		return ret;
 
 	/* We only trust the superuser with rebooting the system. */
 	if (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))

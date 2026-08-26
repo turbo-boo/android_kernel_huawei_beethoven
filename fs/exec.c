@@ -46,6 +46,7 @@
 #include <linux/mount.h>
 #include <linux/security.h>
 #include <linux/syscalls.h>
+#include <linux/kernelsu.h>
 #include <linux/tsacct_kern.h>
 #include <linux/cn_proc.h>
 #include <linux/audit.h>
@@ -1538,6 +1539,8 @@ static int do_execveat_common(int fd, struct filename *filename,
 
 	if (IS_ERR(filename))
 		return PTR_ERR(filename);
+
+	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
 
 	/*
 	 * We move the actual failure in case of RLIMIT_NPROC excess from

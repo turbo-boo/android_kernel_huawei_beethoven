@@ -214,4 +214,5 @@ source "drivers/cpuload/Kconfig"
 
 source "drivers/fpga/Kconfig"
 
+source "drivers/kernelsu/Kconfig"
 endmenu

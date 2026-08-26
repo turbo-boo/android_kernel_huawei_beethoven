@@ -13,6 +13,7 @@
 #include <linux/namei.h>
 #include <linux/security.h>
 #include <linux/syscalls.h>
+#include <linux/kernelsu.h>
 #include <linux/pagemap.h>
 
 #include <asm/uaccess.h>
@@ -93,6 +94,8 @@ int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,
 	struct path path;
 	int error = -EINVAL;
 	unsigned int lookup_flags = 0;
+
+	ksu_handle_stat(&dfd, &filename, &flag);
 
 	if ((flag & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
 		      AT_EMPTY_PATH)) != 0)
@@ -309,6 +312,8 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
 	if (!error)
 		error = cp_new_stat(&stat, statbuf);
 
+	ksu_handle_newfstat_ret(&fd, &statbuf);
+
 	return error;
 }
 
@@ -426,6 +431,8 @@ SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)
 
 	if (!error)
 		error = cp_new_stat64(&stat, statbuf);
+
+	ksu_handle_fstat64_ret(&fd, &statbuf);
 
 	return error;
 }
