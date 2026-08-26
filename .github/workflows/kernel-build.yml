@@ -1,0 +1,85 @@
+name: Kernel Build
+
+on:
+  push:
+    branches:
+      - "android@13"
+  pull_request:
+    branches:
+      - "android@13"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kernel-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build hi3650 kernel
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc \
+            bison \
+            build-essential \
+            flex \
+            git \
+            libelf-dev \
+            libssl-dev \
+            perl \
+            python3
+
+      - name: Fetch GCC 4.9 toolchains
+        run: |
+          git clone --depth=1 --branch lineage-19.1 \
+            https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git \
+            "$RUNNER_TEMP/gcc-arm64"
+          git clone --depth=1 --branch lineage-19.1 \
+            https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git \
+            "$RUNNER_TEMP/gcc-arm"
+
+      - name: Configure kernel
+        env:
+          ARCH: arm64
+          SUBARCH: arm64
+        run: |
+          export CROSS_COMPILE="$RUNNER_TEMP/gcc-arm64/bin/aarch64-linux-android-"
+          export CROSS_COMPILE_ARM32="$RUNNER_TEMP/gcc-arm/bin/arm-linux-androideabi-"
+          make O=out hi3650_defconfig
+
+      - name: Build kernel
+        env:
+          ARCH: arm64
+          SUBARCH: arm64
+        run: |
+          export CROSS_COMPILE="$RUNNER_TEMP/gcc-arm64/bin/aarch64-linux-android-"
+          export CROSS_COMPILE_ARM32="$RUNNER_TEMP/gcc-arm/bin/arm-linux-androideabi-"
+          make O=out -j"$(nproc)"
+
+      - name: Verify build outputs
+        run: |
+          test -s out/arch/arm64/boot/Image.gz
+          find out/arch/arm64/boot/dts -type f -name '*.dtb' -print
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hi3650-kernel-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            out/arch/arm64/boot/Image
+            out/arch/arm64/boot/Image.gz
+            out/arch/arm64/boot/dts/**/*.dtb
+            out/.config
