@@ -76,9 +76,13 @@ jobs:
 
       - name: Verify KernelSU configuration
         run: |
+          grep '^CONFIG_KSU' out/.config || true
           grep -q '^CONFIG_KSU=y$' out/.config
           grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' out/.config
-          grep -q '^# CONFIG_KSU_KPROBES_HOOK is not set$' out/.config
+          if grep -q '^CONFIG_KSU_KPROBES_HOOK=y$' out/.config; then
+            echo 'KernelSU KProbe hook unexpectedly enabled' >&2
+            exit 1
+          fi
 
       - name: Build kernel
         env:
