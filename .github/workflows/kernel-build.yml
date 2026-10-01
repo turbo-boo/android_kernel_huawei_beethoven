@@ -18,9 +18,12 @@ concurrency:
 
 jobs:
   build:
-    name: Build hi3650 kernel
+    name: Build hi3650 kernel with KernelSU Next
     runs-on: ubuntu-22.04
     timeout-minutes: 60
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
 
     steps:
       - name: Checkout kernel source
@@ -28,75 +31,60 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify KernelSU Next source integration
+        run: python3 scripts/verify-kernelsu-next.py
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            bc \
-            bison \
-            build-essential \
-            curl \
-            flex \
-            git \
-            libelf-dev \
-            libssl-dev \
-            perl \
-            python3
+            bc bison build-essential flex git libelf-dev libssl-dev perl python3
 
-      - name: Verify KernelSU Next source integration
+      - name: Fetch pinned GCC 4.9 toolchains
         run: |
-          test "$(git -C KernelSU-Next rev-parse HEAD)" = "a54e4fa46c6cc25bcaa055cf14d790194beffed8"
-          test -L drivers/kernelsu
-          grep -Fq 'obj-$(CONFIG_KSU) += kernelsu/' drivers/Makefile
-          grep -Fq 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig
-          grep -q '^CONFIG_KSU=y$' arch/arm64/configs/hi3650_defconfig
-          grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' arch/arm64/configs/hi3650_defconfig
-          grep -Fq 'ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);' fs/exec.c
-          grep -Fq 'ksu_handle_vfs_read(&file, &buf, &count, &pos);' fs/read_write.c
-          grep -Fq 'ksu_handle_setresuid(ruid, euid, suid);' kernel/sys.c
-          grep -Fq 'ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);' kernel/reboot.c
-
-      - name: Fetch GCC 4.9 toolchains
-        run: |
-          git clone --depth=1 --branch lineage-19.1 \
+          fetch_toolchain() {
+            local repo="$1" revision="$2" destination="$3"
+            git init "$destination"
+            git -C "$destination" remote add origin "$repo"
+            git -C "$destination" fetch --depth=1 origin "$revision"
+            git -C "$destination" checkout --detach FETCH_HEAD
+          }
+          fetch_toolchain \
             https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git \
-            "$RUNNER_TEMP/gcc-arm64"
-          git clone --depth=1 --branch lineage-19.1 \
+            5e030eafe024784a73cdf47e6936ac0dbfc763dc "$RUNNER_TEMP/gcc-arm64"
+          fetch_toolchain \
             https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git \
-            "$RUNNER_TEMP/gcc-arm"
+            111258a10e017f067b27e6cfcea7619d753f3309 "$RUNNER_TEMP/gcc-arm"
+          echo "CROSS_COMPILE=$RUNNER_TEMP/gcc-arm64/bin/aarch64-linux-android-" >> "$GITHUB_ENV"
+          echo "CROSS_COMPILE_ARM32=$RUNNER_TEMP/gcc-arm/bin/arm-linux-androideabi-" >> "$GITHUB_ENV"
 
       - name: Configure kernel
-        env:
-          ARCH: arm64
-          SUBARCH: arm64
         run: |
-          export CROSS_COMPILE="$RUNNER_TEMP/gcc-arm64/bin/aarch64-linux-android-"
-          export CROSS_COMPILE_ARM32="$RUNNER_TEMP/gcc-arm/bin/arm-linux-androideabi-"
           make O=out hi3650_defconfig
-
-      - name: Verify KernelSU configuration
-        run: |
-          grep '^CONFIG_KSU' out/.config || true
-          grep -q '^CONFIG_KSU=y$' out/.config
-          grep -q '^CONFIG_KSU_MANUAL_HOOK=y$' out/.config
-          if grep -q '^CONFIG_KSU_KPROBES_HOOK=y$' out/.config; then
-            echo 'KernelSU KProbe hook unexpectedly enabled' >&2
-            exit 1
-          fi
+          python3 scripts/verify-kernelsu-next.py --config out/.config
 
       - name: Build kernel
-        env:
-          ARCH: arm64
-          SUBARCH: arm64
         run: |
-          export CROSS_COMPILE="$RUNNER_TEMP/gcc-arm64/bin/aarch64-linux-android-"
-          export CROSS_COMPILE_ARM32="$RUNNER_TEMP/gcc-arm/bin/arm-linux-androideabi-"
-          make O=out -j"$(nproc)"
+          set -o pipefail
+          make O=out -j"$(nproc)" Image.gz dtbs modules 2>&1 | tee kernel-build.log
 
-      - name: Verify build outputs
+      - name: Verify build outputs and source stability
         run: |
-          test -s out/arch/arm64/boot/Image.gz
-          find out/arch/arm64/boot/dts -type f -name '*.dtb' -print
+          python3 scripts/verify-kernelsu-next.py --out out
+          git diff --exit-code
+          git -C KernelSU-Next diff --exit-code
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hi3650-build-diagnostics-${{ github.sha }}
+          if-no-files-found: ignore
+          retention-days: 14
+          include-hidden-files: true
+          path: |
+            kernel-build.log
+            out/.config
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
@@ -107,5 +95,6 @@ jobs:
           path: |
             out/arch/arm64/boot/Image
             out/arch/arm64/boot/Image.gz
-            out/arch/arm64/boot/dts/**/*.dtb
-            out/.config
+            out/arch/arm64/boot/dts/auto-generate/*.dtb
+            out/System.map
+            out/**/*.ko
