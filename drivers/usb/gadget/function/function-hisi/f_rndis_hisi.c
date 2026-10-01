@@ -126,6 +126,9 @@ static struct device_attribute *rndis_function_attributes[] = {
 	NULL
 };
 
+/* android0/f_rndis of the live instance; only one rndis instance exists. */
+static struct device *rndis_function_dev;
+
 static int create_rndis_device(struct usb_function_instance *fi)
 {
 	struct device *dev;
@@ -147,6 +150,7 @@ static int create_rndis_device(struct usb_function_instance *fi)
 		}
 	}
 	dev_set_drvdata(dev, fi);
+	rndis_function_dev = dev;
 	return 0;
 }
 
@@ -155,6 +159,16 @@ static void rndis_free_inst(struct usb_function_instance *f)
 	struct f_rndis_opts *opts;
 
 	opts = container_of(f, struct f_rndis_opts, func_inst);
+
+	/*
+	 * Android's init.usb.configfs.rc rmdirs rndis.gs4 on every
+	 * sys.usb.config=none; without this the next mkdir fails with
+	 * -EEXIST on android0/f_rndis and RNDIS (USB tethering) never binds.
+	 */
+	if (rndis_function_dev) {
+		device_unregister(rndis_function_dev);
+		rndis_function_dev = NULL;
+	}
 
 	kfree(opts->rndis_os_desc.group.default_groups); /* single VLA chunk */
 	kfree(opts);
