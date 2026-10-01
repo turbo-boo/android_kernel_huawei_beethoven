@@ -9,7 +9,7 @@ struct filename;
 struct stat;
 struct stat64;
 
-#ifdef CONFIG_KSU
+#ifdef CONFIG_KSU_MANUAL_HOOK
 int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
                         void *argv, void *envp, int *flags);
 int ksu_handle_faccessat(int *dfd, const char __user **filename_user,
@@ -19,8 +19,10 @@ int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
                         size_t *count_ptr, loff_t **pos);
 void ksu_handle_newfstat_ret(unsigned int *fd,
                              struct stat __user **statbuf);
+#if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)
 void ksu_handle_fstat64_ret(unsigned long *fd,
                             struct stat64 __user **statbuf);
+#endif
 int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);
 int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
                           void __user **arg);
@@ -54,10 +56,12 @@ static inline void ksu_handle_newfstat_ret(unsigned int *fd,
                                            struct stat __user **statbuf)
 {
 }
+#if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)
 static inline void ksu_handle_fstat64_ret(unsigned long *fd,
                                           struct stat64 __user **statbuf)
 {
 }
+#endif
 static inline int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
 {
     return 0;

@@ -92,6 +92,11 @@ extern void __chk_io_ptr(const volatile void __iomem *);
 #include <linux/compiler-clang.h>
 #endif
 
+/* This kernel has no control-flow integrity instrumentation. */
+#ifndef __nocfi
+#define __nocfi
+#endif
+
 /*
  * Generic compiler-dependent macros required for kernel
  * build go below this comment. Actual compiler/compiler version
