@@ -1623,7 +1623,12 @@ static int android_setup(struct usb_gadget *gadget,
 #endif
 
 	list_for_each_entry(fi, &gi->available_func, cfs_list) {
-		if (fi != NULL && fi->f != NULL && fi->f->setup != NULL) {
+		/*
+		 * A function linked into a config after the gadget was bound has
+		 * no f->config; rndis_setup() dereferences it in IRQ context.
+		 */
+		if (fi != NULL && fi->f != NULL && fi->f->setup != NULL &&
+		    fi->f->config != NULL) {
 			value = fi->f->setup(fi->f, c);
 			if (value >= 0)
 				break;
