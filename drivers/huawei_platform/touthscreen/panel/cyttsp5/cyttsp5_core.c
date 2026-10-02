@@ -5496,13 +5496,6 @@ static ssize_t cyttsp5_easy_wakeup_gesture_store(struct device *dev,
 		return -EINVAL;
 	}
 
-	/* only gestures that have a wakeup key may be enabled */
-	if (value & ~cd->easy_wakeup_supported_gestures) {
-		TS_LOG_ERR("%s: unsupported gestures: 0x%lx (supported 0x%x)\n",
-			   __func__, value, cd->easy_wakeup_supported_gestures);
-		return -EINVAL;
-	}
-
 	mutex_lock(&cd->system_lock);
 	if (cd->sysinfo.ready && IS_PIP_VER_GE(&cd->sysinfo, 1, 2)) {
 		cd->easy_wakeup_gesture = (unsigned int)value;

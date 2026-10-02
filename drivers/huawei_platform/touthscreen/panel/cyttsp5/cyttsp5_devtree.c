@@ -669,21 +669,6 @@ static char *touch_setting_names[CY_IC_GRPNUM_NUM] = {
 	NULL,			/* CY_IC_GRPNUM_TTHE_REGS */
 };
 
-/*
- * Used when the device tree provides no cy,easy_wakeup_gesture_keys (the
- * BTV device tree ships easy wakeup disabled). The touch firmware reports
- * easy wakeup, so offer double tap -> KEY_WAKEUP; userspace still has to
- * turn it on through easy_wakeup_gesture.
- */
-static const u16 cyttsp5_default_wakeup_keys[GESTURE_MAX] = {
-	[GESTURE_DOUBLE_CLICK] = KEY_WAKEUP,
-};
-
-static struct cyttsp5_wakeup_keys cyttsp5_default_wakeup = {
-	.keys = cyttsp5_default_wakeup_keys,
-	.size = GESTURE_MAX,
-};
-
 static struct cyttsp5_wakeup_keys *create_and_get_wakeup_keys(struct device_node
 							      *dev_node)
 {
@@ -900,12 +885,6 @@ static struct cyttsp5_core_platform_data *create_and_get_core_pdata(struct
 	}
 
 	pdata->wakeup_keys = create_and_get_wakeup_keys(core_node);
-	if (IS_ERR_OR_NULL(pdata->wakeup_keys)) {
-		pdata->wakeup_keys = &cyttsp5_default_wakeup;
-		pdata->flags |= CY_CORE_FLAG_WAKE_ON_GESTURE;
-		pdata->easy_wakeup_supported_gestures |=
-		    APP_ENABLE_GESTURE(GESTURE_DOUBLE_CLICK);
-	}
 
 	rc = of_property_read_u32(core_node, "cy,upgrade_ttconfig", &value);
 	if (!rc) {
