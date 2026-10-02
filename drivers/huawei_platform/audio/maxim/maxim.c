@@ -34,6 +34,7 @@
 #endif
 
 #include "huawei_platform/audio/maxim.h"
+#include "../../../of/of_private.h"
 
 #define HWLOG_TAG maxim
 HWLOG_REGIST();
@@ -624,7 +625,75 @@ static void __exit maxim_exit(void)
 }
 
 
+/*
+ * The audio HAL reads audio_hw_config/smartpa_info/{pa_num,pa_type} to
+ * choose between a single smartPA and a stereo pair. Older device trees
+ * (BEETHOVEN-DCO) only carry spk_pa_num = "stereo", so the HAL falls back
+ * to its single-PA path and drives the second PA as an earpiece:
+ * (L+R)/2 at gain_incall, several dB below the first PA. Publish the
+ * node the HAL expects when the DT describes a stereo pair.
+ */
+static char smartpa_info_name[] = "smartpa_info";
+static char smartpa_info_pa_num[] = "2";
+static char smartpa_info_pa_type[] = "11";	/* binary: spk and rcv PA */
+
+static struct property smartpa_info_props[] = {
+	{ .name = "name", .value = smartpa_info_name,
+	  .length = sizeof(smartpa_info_name), .next = &smartpa_info_props[1] },
+	{ .name = "pa_num", .value = smartpa_info_pa_num,
+	  .length = sizeof(smartpa_info_pa_num), .next = &smartpa_info_props[2] },
+	{ .name = "pa_type", .value = smartpa_info_pa_type,
+	  .length = sizeof(smartpa_info_pa_type) },
+};
+
+static struct device_node smartpa_info_node = {
+	.name = smartpa_info_name,
+	.type = "<NULL>",
+	.full_name = "/audio_hw_config/smartpa_info",
+	.properties = smartpa_info_props,
+};
+
+static int __init maxim_publish_smartpa_info(void)
+{
+	struct device_node *parent, *child;
+	const char *spk_pa_num = NULL;
+	unsigned long flags;
+	int ret;
+
+	if (get_maxim_num() != 2)
+		return 0;
+
+	parent = of_find_node_by_path("/audio_hw_config");
+	if (!parent)
+		return 0;
+
+	child = of_get_child_by_name(parent, smartpa_info_name);
+	if (child || of_property_read_string(parent, "spk_pa_num", &spk_pa_num) ||
+	    strcmp(spk_pa_num, "stereo")) {
+		of_node_put(child);
+		of_node_put(parent);
+		return 0;
+	}
+
+	of_node_init(&smartpa_info_node);
+	smartpa_info_node.parent = parent;	/* keeps the reference */
+
+	mutex_lock(&of_mutex);
+	raw_spin_lock_irqsave(&devtree_lock, flags);
+	smartpa_info_node.sibling = parent->child;
+	parent->child = &smartpa_info_node;
+	raw_spin_unlock_irqrestore(&devtree_lock, flags);
+	ret = __of_attach_node_sysfs(&smartpa_info_node);
+	mutex_unlock(&of_mutex);
+
+	hwlog_info("%s: added %s (pa_num %s, pa_type %s), sysfs %d\n", __func__,
+		   smartpa_info_node.full_name, smartpa_info_pa_num,
+		   smartpa_info_pa_type, ret);
+	return 0;
+}
+
 device_initcall_sync(maxim_init);
+late_initcall(maxim_publish_smartpa_info);
 module_exit(maxim_exit);
 
 MODULE_DESCRIPTION("MAXIM misc device driver");
