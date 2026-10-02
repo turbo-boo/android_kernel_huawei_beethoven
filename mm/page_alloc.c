@@ -1581,7 +1581,7 @@ int *get_migratetype_fallbacks(int mtype)
 static struct page *__rmqueue_cma_fallback(struct zone *zone,
 					unsigned int order)
 {
-	return __rmqueue_smallest(zone, order, MIGRATE_MOVABLE);
+	return __rmqueue_smallest(zone, order, MIGRATE_CMA);
 }
 #else
 static inline struct page *__rmqueue_cma_fallback(struct zone *zone,
@@ -1983,13 +1983,22 @@ static struct page *__rmqueue(struct zone *zone, unsigned int order,
 }
 
 #ifdef CONFIG_CMA
+/*
+ * Serve a __GFP_CMA allocation: prefer free CMA pages so the reusable CMA
+ * pools hold movable data instead of sitting idle, and fall back to
+ * ordinary movable pages when CMA is exhausted or a cma_alloc() is
+ * migrating pages out of it.
+ */
 static struct page *__rmqueue_cma(struct zone *zone, unsigned int order)
 {
-	struct page *page = 0;
-	if (IS_ENABLED(CONFIG_CMA))
-		if (!zone->cma_alloc)
-			page = __rmqueue_cma_fallback(zone, order);
-	trace_mm_page_alloc_zone_locked(page, order, MIGRATE_CMA);
+	struct page *page = NULL;
+
+	if (!zone->cma_alloc)
+		page = __rmqueue_cma_fallback(zone, order);
+	if (page)
+		trace_mm_page_alloc_zone_locked(page, order, MIGRATE_CMA);
+	else
+		page = __rmqueue(zone, order, MIGRATE_MOVABLE, 0);
 	return page;
 }
 #else
@@ -2470,8 +2479,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 			if (page)
 				trace_mm_page_alloc_zone_locked(page, order, migratetype);
 		}
-		if (!page && migratetype == MIGRATE_MOVABLE &&
-				gfp_flags & __GFP_CMA)
+		if (!page && is_migrate_cma(migratetype))
 			page = __rmqueue_cma(zone, order);
 
 		if (!page)
