@@ -24,23 +24,34 @@
 
 #define ZSTD_DEF_LEVEL	3
 
+/*
+ * zram is the only user and compresses single pages, so size the parameters
+ * (window, hash tables, workspace) for PAGE_SIZE inputs instead of unknown
+ * size. Read when a transform is created, i.e. when zram's disksize is set.
+ */
+static int compression_level = ZSTD_DEF_LEVEL;
+module_param(compression_level, int, 0644);
+MODULE_PARM_DESC(compression_level, "zstd level for new transforms (1-22)");
+
 struct zstd_ctx {
 	ZSTD_CCtx *cctx;
 	ZSTD_DCtx *dctx;
 	void *cwksp;
 	void *dwksp;
+	ZSTD_parameters params;
 };
 
 static ZSTD_parameters zstd_params(void)
 {
-	return ZSTD_getParams(ZSTD_DEF_LEVEL, 0, 0);
+	int level = clamp(compression_level, 1, ZSTD_maxCLevel());
+
+	return ZSTD_getParams(level, PAGE_SIZE, 0);
 }
 
 static int zstd_comp_init(struct zstd_ctx *ctx)
 {
 	int ret = 0;
-	const ZSTD_parameters params = zstd_params();
-	const size_t wksp_size = ZSTD_CCtxWorkspaceBound(params.cParams);
+	const size_t wksp_size = ZSTD_CCtxWorkspaceBound(ctx->params.cParams);
 
 	ctx->cwksp = vzalloc(wksp_size);
 	if (!ctx->cwksp) {
@@ -114,6 +125,8 @@ static int zstd_init(struct crypto_tfm *tfm)
 {
 	struct zstd_ctx *ctx = crypto_tfm_ctx(tfm);
 
+	/* Fixed per transform: the workspace is sized for these params. */
+	ctx->params = zstd_params();
 	return __zstd_init(ctx);
 }
 
@@ -135,9 +148,9 @@ static int __zstd_compress(const u8 *src, unsigned int slen,
 {
 	size_t out_len;
 	struct zstd_ctx *zctx = ctx;
-	const ZSTD_parameters params = zstd_params();
 
-	out_len = ZSTD_compressCCtx(zctx->cctx, dst, *dlen, src, slen, params);
+	out_len = ZSTD_compressCCtx(zctx->cctx, dst, *dlen, src, slen,
+				    zctx->params);
 	if (ZSTD_isError(out_len))
 		return -EINVAL;
 	*dlen = out_len;
