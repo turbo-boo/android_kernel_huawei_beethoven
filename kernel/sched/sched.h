@@ -1,5 +1,6 @@
 
 #include <linux/sched.h>
+#include <linux/psi.h>
 #include <linux/sched/sysctl.h>
 #include <linux/sched/rt.h>
 #include <linux/sched/smt.h>

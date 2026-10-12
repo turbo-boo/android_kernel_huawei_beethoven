@@ -16,6 +16,7 @@
 #include <linux/backing-dev.h>
 #include <linux/blkdev.h>
 #include <linux/pagevec.h>
+#include <linux/psi.h>
 #include <linux/migrate.h>
 
 #include <asm/pgtable.h>

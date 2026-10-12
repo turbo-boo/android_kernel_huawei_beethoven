@@ -32,6 +32,7 @@
 #include <linux/hardirq.h> /* for BUG_ON(!in_atomic()) only */
 #include <linux/hugetlb.h>
 #include <linux/memcontrol.h>
+#include <linux/psi.h>
 #include <linux/cleancache.h>
 #include <linux/rmap.h>
 #include "internal.h"

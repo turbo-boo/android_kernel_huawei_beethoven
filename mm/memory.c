@@ -43,6 +43,7 @@
 #include <linux/hugetlb.h>
 #include <linux/mman.h>
 #include <linux/swap.h>
+#include <linux/psi.h>
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
 #include <linux/ksm.h>
@@ -2584,7 +2585,13 @@ int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	}
 
 	swapcache = page;
-	locked = lock_page_or_retry(page, mm, flags);
+	{
+		unsigned long pflags;
+
+		psi_memstall_enter(&pflags);
+		locked = lock_page_or_retry(page, mm, flags);
+		psi_memstall_leave(&pflags);
+	}
 
 	delayacct_clear_flag(DELAYACCT_PF_SWAPIN);
 	if (!locked) {
