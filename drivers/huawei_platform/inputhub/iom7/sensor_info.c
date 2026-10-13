@@ -4892,8 +4892,7 @@ static ssize_t attr_set_pdr_delay(struct device *dev,
 				  struct device_attribute *attr,
 				  const char *buf, size_t size)
 {
-	/*unsigned long val = 0;*/
-	int val = 0;
+	unsigned long val = 0;
 	int ret = -1;
 	int start_update_flag;
 	int precise;
@@ -4914,7 +4913,7 @@ static ssize_t attr_set_pdr_delay(struct device *dev,
 	interval = val % 1000;
 
 	hwlog_info
-	    ("val = %d start_update_flag = %d precise = %d interval= %d\n", val,
+	    ("val = %lu start_update_flag = %d precise = %d interval= %d\n", val,
 	     start_update_flag, precise, interval);
 	if (precise == 0)
 		precise = 1;
@@ -4949,7 +4948,7 @@ static ssize_t attr_set_pdr_delay(struct device *dev,
 	if (pkg_mcu.errno != 0)
 		hwlog_err("set pdr delay fail\n");
 	else
-		hwlog_info("set pdr delay (%ld)success\n", val);
+		hwlog_info("set pdr delay (%lu)success\n", val);
 
 	return size;
 }
