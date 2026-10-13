@@ -630,7 +630,7 @@ static void power_allocator_unbind(struct thermal_zone_device *tz)
 static int power_allocator_throttle(struct thermal_zone_device *tz, int trip)
 {
 	int ret;
-	int switch_on_temp, control_temp;
+	unsigned long switch_on_temp, control_temp;
 	struct power_allocator_params *params = tz->governor_data;
 
 	/*
@@ -679,7 +679,7 @@ static int power_allocator_throttle(struct thermal_zone_device *tz, int trip)
 void update_pid_value(struct thermal_zone_device *tz)
 {
 	int ret;
-	int control_temp;
+	unsigned long control_temp;
 	u32 sustainable_power = 0;
 	struct power_allocator_params *params = tz->governor_data;
 
