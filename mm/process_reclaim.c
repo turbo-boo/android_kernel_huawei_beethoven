@@ -68,6 +68,18 @@ static int swap_opt_eff = 50;
 module_param_named(swap_opt_eff, swap_opt_eff, int, S_IRUGO | S_IWUSR);
 
 static atomic_t skip_reclaim = ATOMIC_INIT(0);
+
+/* Stop swapping out tasks once free swap is below this percentage. */
+static int swap_free_min_pct = 25;
+module_param_named(swap_free_min_pct, swap_free_min_pct, int,
+	S_IRUGO | S_IWUSR);
+
+static bool swap_space_low(void)
+{
+	return !total_swap_pages ||
+		get_nr_swap_pages() * 100 < total_swap_pages * swap_free_min_pct;
+}
+
 /* Not atomic since only a single instance of swap_fn run at a time */
 static int monitor_eff;
 
@@ -229,6 +241,9 @@ static int vmpressure_notifier(struct notifier_block *nb,
 		return 0;
 
 	if (atomic_dec_if_positive(&skip_reclaim) >= 0)
+		return 0;
+
+	if (swap_space_low())
 		return 0;
 
 	if ((pressure >= pressure_min) && (pressure < pressure_max))
